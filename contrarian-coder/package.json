@@ -1,0 +1,114 @@
+{
+  "name": "contrarian-coder",
+  "displayName": "Contrarian Coder",
+  "description": "Recibe consejos contrarios y análisis de tu código en tiempo real.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "icon": "resources/icon.png",
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "contrarian-coder.openPanel",
+        "title": "Contrarian Coder: Abrir Panel"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "contrarian-sidebar",
+          "title": "Contrarian Coder",
+          "icon": "resources/icon.png"
+        }
+      ]
+    },
+    "views": {
+      "contrarian-sidebar": [
+        {
+          "type": "webview",
+          "id": "contrarian-coder-view",
+          "name": "Análisis Contrario",
+          "icon": "resources/icon.png"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Contrarian Coder",
+      "properties": {
+        "contrarianCoder.openRouterKey": {
+          "type": "string",
+          "default": "",
+          "description": "Tu API Key de OpenRouter"
+        },
+        "contrarianCoder.fastDelay": {
+          "type": "number",
+          "default": 0,
+          "description": "Retraso inicial para la IA Rápida (en segundos)."
+        },
+        "contrarianCoder.slowDelay": {
+          "type": "number",
+          "default": 0,
+          "description": "Retraso para la IA Detallada (en segundos)."
+        },
+        "contrarianCoder.aiProvider": {
+          "type": "string",
+          "enum": ["openrouter", "gemini", "gpt"],
+          "default": "openrouter",
+          "description": "Proveedor de IA a utilizar."
+        },
+        "contrarianCoder.language": {
+          "type": "string",
+          "enum": ["es", "en"],
+          "default": "es",
+          "description": "Idioma de la interfaz y la IA (es: Español, en: Inglés)."
+        },
+        "contrarianCoder.aiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Tu API Key para el proveedor seleccionado."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.75.0",
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.1",
+    "@types/node": "16.x",
+    "@types/react": "^18.0.27",
+    "@types/react-dom": "^18.0.10",
+    "@typescript-eslint/eslint-plugin": "^5.53.0",
+    "@typescript-eslint/parser": "^5.53.0",
+    "eslint": "^8.34.0",
+    "glob": "^8.1.0",
+    "mocha": "^10.2.0",
+    "typescript": "^4.9.5",
+    "ts-loader": "^9.4.2",
+    "webpack": "^5.75.0",
+    "webpack-cli": "^5.0.1",
+    "style-loader": "^3.3.1",
+    "css-loader": "^6.7.3",
+    "@vscode/test-electron": "^2.2.3"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}
