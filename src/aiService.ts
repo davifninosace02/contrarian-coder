@@ -38,7 +38,8 @@ const aiTranslations: Record<string, any> = {
         errorNoContent: "La IA no devolvió contenido.",
         errorInvalidJSON: "La IA no devolvió un JSON válido.",
         errorRead: "Error al leer la respuesta.",
-        errorConn: "Error de conexión: "
+        errorConn: "Error de conexión: ",
+        errorTimeout: "Timeout: La IA tardó demasiado en responder (60s)."
     },
     en: {
         errorKey: "Please enter an API Key in the extension settings.",
@@ -46,7 +47,8 @@ const aiTranslations: Record<string, any> = {
         errorNoContent: "The AI did not return any content.",
         errorInvalidJSON: "The AI did not return valid JSON.",
         errorRead: "Error reading response.",
-        errorConn: "Connection error: "
+        errorConn: "Connection error: ",
+        errorTimeout: "Timeout: The AI took too long to respond (60s)."
     }
 };
 
@@ -136,9 +138,14 @@ export class AIService {
                 });
             });
 
-            req.on('error', (e) => {
+            req.on('error', (e: Error) => {
                 console.error('[AIService] Connection error:', e.message);
                 resolve({ error: `${trans.errorConn}${e.message}` });
+            });
+
+            req.setTimeout(60000, () => {
+                req.destroy();
+                resolve({ error: trans.errorTimeout });
             });
 
             req.write(postData);

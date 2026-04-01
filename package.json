@@ -1,14 +1,24 @@
 {
   "name": "contrarian-coder",
   "displayName": "Contrarian Coder",
-  "description": "Recibe consejos contrarios y análisis de tu código en tiempo real.",
-  "version": "0.0.1",
+  "description": "AI-powered contrarian code analysis. Get alternative approaches and critical reviews for your code. / Análisis contrario de código con IA.",
+  "version": "1.0.0",
   "engines": {
     "vscode": "^1.75.0"
   },
   "icon": "resources/icon.png",
   "categories": [
-    "Other"
+    "Programming Languages",
+    "Linters",
+    "Education"
+  ],
+  "keywords": [
+    "ai",
+    "code review",
+    "analysis",
+    "contrarian",
+    "refactor",
+    "code quality"
   ],
   "activationEvents": [],
   "main": "./dist/extension.js",
@@ -17,8 +27,33 @@
       {
         "command": "contrarian-coder.openPanel",
         "title": "Contrarian Coder: Abrir Panel"
+      },
+      {
+        "command": "contrarian-coder.analyzeCode",
+        "title": "Contrarian Coder: Analizar Código Actual"
+      },
+      {
+        "command": "contrarian-coder.analyzeSelection",
+        "title": "Contrarian Coder: Analizar Selección"
       }
     ],
+    "keybindings": [
+      {
+        "command": "contrarian-coder.analyzeCode",
+        "key": "ctrl+shift+c",
+        "mac": "cmd+shift+c",
+        "when": "editorTextFocus"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "contrarian-coder.analyzeSelection",
+          "when": "editorHasSelection",
+          "group": "contrarian"
+        }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -58,7 +93,7 @@
         },
         "contrarianCoder.aiProvider": {
           "type": "string",
-          "enum": ["openrouter", "gemini", "gpt"],
+          "enum": ["openrouter", "gemini"],
           "default": "openrouter",
           "description": "Proveedor de IA a utilizar."
         },
@@ -92,8 +127,6 @@
     "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.1",
     "@types/node": "16.x",
-    "@types/react": "^18.0.27",
-    "@types/react-dom": "^18.0.10",
     "@typescript-eslint/eslint-plugin": "^5.53.0",
     "@typescript-eslint/parser": "^5.53.0",
     "eslint": "^8.34.0",
@@ -106,9 +139,5 @@
     "style-loader": "^3.3.1",
     "css-loader": "^6.7.3",
     "@vscode/test-electron": "^2.2.3"
-  },
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
   }
 }

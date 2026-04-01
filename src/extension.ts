@@ -33,6 +33,8 @@ const translations: any = {
         consLabel: "❌ Desventajas",
         detectedErrors: "🔴 Errores detectados",
         applyBtn: "✨ Aplicar Código",
+        copyBtn: "📋 Copiar",
+        copiedBtn: "✅ ¡Copiado!",
         loadingProject: "Analizando proyecto completo...",
         projectFilesLabel: "Archivos del proyecto: ",
         fastAnalysisLabel: "ANÁLISIS RÁPIDO",
@@ -40,7 +42,15 @@ const translations: any = {
         notAvailable: "No disponible",
         notProvided: "No proporcionado",
         currentCodeLabel: "Código actual",
-        previousAnalysis: "Análisis rápido previo"
+        previousAnalysis: "Análisis rápido previo",
+        fixErrorsBtn: "🔧 Corregir Errores",
+        loadingFix: "Buscando y corrigiendo errores...",
+        fixTitle: "🔧 Errores Corregidos",
+        fixDescription: "Descripción del error",
+        fixNoErrors: "✅ No se encontraron errores en el código.",
+        fixOriginal: "🟠 Código con error",
+        fixCorrected: "🟢 Código corregido",
+        helpFix: "<b>🔧 Corregir Errores:</b> Busca automáticamente bugs, errores de sintaxis y lógica en tu código y te propone la corrección."
     },
     en: {
         aiProvider: "AI Provider",
@@ -72,6 +82,8 @@ const translations: any = {
         consLabel: "❌ Disadvantages",
         detectedErrors: "🔴 Detected errors",
         applyBtn: "✨ Apply Code",
+        copyBtn: "📋 Copy",
+        copiedBtn: "✅ Copied!",
         loadingProject: "Analyzing entire project...",
         projectFilesLabel: "Project files: ",
         fastAnalysisLabel: "FAST ANALYSIS",
@@ -79,7 +91,15 @@ const translations: any = {
         notAvailable: "Not available",
         notProvided: "Not provided",
         currentCodeLabel: "Current code",
-        previousAnalysis: "Previous fast analysis"
+        previousAnalysis: "Previous fast analysis",
+        fixErrorsBtn: "🔧 Fix Errors",
+        loadingFix: "Scanning and fixing errors...",
+        fixTitle: "🔧 Errors Fixed",
+        fixDescription: "Error description",
+        fixNoErrors: "✅ No errors found in the code.",
+        fixOriginal: "🟠 Code with error",
+        fixCorrected: "🟢 Corrected code",
+        helpFix: "<b>🔧 Fix Errors:</b> Automatically finds bugs, syntax errors, and logic issues in your code and proposes fixes."
     }
 };
 
@@ -102,7 +122,25 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.executeCommand('workbench.view.extension.contrarian-sidebar');
     });
 
-    context.subscriptions.push(disposable);
+    // Ctrl+Shift+C → Analizar archivo actual
+    const analyzeCmd = vscode.commands.registerCommand('contrarian-coder.analyzeCode', () => {
+        vscode.commands.executeCommand('workbench.view.extension.contrarian-sidebar');
+        if (vscode.window.activeTextEditor) {
+            provider.updateAnalysis(vscode.window.activeTextEditor.document.getText(), true);
+        }
+    });
+
+    // Click derecho → Analizar selección
+    const analyzeSelectionCmd = vscode.commands.registerCommand('contrarian-coder.analyzeSelection', () => {
+        vscode.commands.executeCommand('workbench.view.extension.contrarian-sidebar');
+        const editor = vscode.window.activeTextEditor;
+        if (editor && !editor.selection.isEmpty) {
+            const selectedText = editor.document.getText(editor.selection);
+            provider.updateAnalysis(selectedText, true);
+        }
+    });
+
+    context.subscriptions.push(disposable, analyzeCmd, analyzeSelectionCmd);
 }
 
 class ContrarianWebviewProvider implements vscode.WebviewViewProvider {
@@ -152,24 +190,16 @@ class ContrarianWebviewProvider implements vscode.WebviewViewProvider {
         };
         this._refreshWebviewHtml();
 
+        webviewView.onDidChangeVisibility(() => {
+            if (webviewView.visible) {
+                this._restoreStateToWebview();
+            }
+        });
+
         webviewView.webview.onDidReceiveMessage(async (data: { type: string; config?: any; intent?: string; code?: string; originalCodeToReplace?: string }) => {
             switch (data.type) {
                 case 'ready':
-                    if (this._isAnalyzingRef === 'project') {
-                        this._view?.webview.postMessage({ type: 'loadingProject', value: true });
-                    } else if (this._isAnalyzingRef === 'fast') {
-                        this._view?.webview.postMessage({ type: 'loadingFast', value: true });
-                    } else if (this._isAnalyzingRef === 'slow') {
-                        if (this._lastFastResult) {
-                            this._view?.webview.postMessage({ type: 'fastResult', analysis: this._lastFastResult });
-                        }
-                        this._view?.webview.postMessage({ type: 'loadingSlow', value: true });
-                    } else if (this._lastAnalysisResult) {
-                        this._view?.webview.postMessage({ type: 'slowResult', analysis: this._lastAnalysisResult });
-                    }
-                    if (this._userIntent) {
-                        this._view?.webview.postMessage({ type: 'restoreIntent', intent: this._userIntent });
-                    }
+                    this._restoreStateToWebview();
                     break;
                 case 'saveConfig':
                     await this._handleSaveConfig(data.config);
@@ -204,8 +234,36 @@ class ContrarianWebviewProvider implements vscode.WebviewViewProvider {
                         this._applyCodeToEditor(data.code, data.originalCodeToReplace);
                     }
                     break;
+                case 'fixErrors':
+                    if (vscode.window.activeTextEditor) {
+                        this._fixErrors(vscode.window.activeTextEditor.document.getText());
+                    } else {
+                        vscode.window.showWarningMessage(translations[this._language].noFileWarning);
+                    }
+                    break;
             }
         });
+    }
+
+    private _restoreStateToWebview() {
+        if (!this._view) return;
+        
+        if (this._isAnalyzingRef === 'project') {
+            this._view.webview.postMessage({ type: 'loadingProject', value: true });
+        } else if (this._isAnalyzingRef === 'fast') {
+            this._view.webview.postMessage({ type: 'loadingFast', value: true });
+        } else if (this._isAnalyzingRef === 'slow') {
+            if (this._lastFastResult) {
+                this._view.webview.postMessage({ type: 'fastResult', analysis: this._lastFastResult });
+            }
+            this._view.webview.postMessage({ type: 'loadingSlow', value: true });
+        } else if (this._lastAnalysisResult) {
+            this._view.webview.postMessage({ type: 'slowResult', analysis: this._lastAnalysisResult });
+        }
+        
+        if (this._userIntent) {
+            this._view.webview.postMessage({ type: 'restoreIntent', intent: this._userIntent });
+        }
     }
 
     private async _applyCodeToEditor(code: string, originalCodeToReplace?: string) {
@@ -216,7 +274,7 @@ class ContrarianWebviewProvider implements vscode.WebviewViewProvider {
         }
 
         try {
-            await editor.edit(editBuilder => {
+            await editor.edit((editBuilder: vscode.TextEditorEdit) => {
                 if (!editor.selection.isEmpty) {
                     editBuilder.replace(editor.selection, code);
                 } else if (originalCodeToReplace) {
@@ -306,7 +364,7 @@ class ContrarianWebviewProvider implements vscode.WebviewViewProvider {
     private async _gatherProjectContext(): Promise<string> {
         const files = await vscode.workspace.findFiles('**/*', '**/node_modules/**');
         const t = translations[this._language];
-        return `${t.projectFilesLabel}${files.slice(0, 30).map(f => f.fsPath.split(/[\\\/]/).pop()).join(', ')}`;
+        return `${t.projectFilesLabel}${files.slice(0, 30).map((f: vscode.Uri) => f.fsPath.split(/[\\\/]/).pop()).join(', ')}`;
     }
 
     private async _getFullProjectContent(): Promise<string> {
@@ -399,12 +457,72 @@ ${t.currentCodeLabel}:\n${code}`;
         const fullPrompt = `${system}\n\n${userPrompt}`;
         return AIService.analyze(fullPrompt, this._language, apiKey);
     }
+    private _getFixErrorsPrompt(): string {
+        const langName = this._language === 'es' ? 'Spanish' : 'English';
+        return `
+# ROLE: ERROR FIXER
+You are an expert debugger and code fixer. Your ONLY job is to find bugs, syntax errors, logic errors, typos, and potential runtime issues in the provided code.
+
+# STRICT RULES
+1. **JSON ONLY:** Your entire response must be a single, valid JSON object.
+2. **LANGUAGE:** All descriptions must be in ${langName}.
+3. **PRECISION:** Only report REAL errors. Do not invent problems.
+4. **COMPLETE FIX:** Provide the full corrected code block, not just the changed line.
+
+# RESPONSE SCHEMA
+{
+  "fixes": [
+    {
+      "description": "Clear explanation of the error in ${langName}",
+      "severity": "critical" | "warning" | "info",
+      "line": "approximate line number or range",
+      "originalCode": "The exact code block that has the error",
+      "fixedCode": "The corrected version of that code block"
+    }
+  ],
+  "summary": "Brief summary of total errors found in ${langName}"
+}
+
+If no errors are found, return: { "fixes": [], "summary": "No errors found" }
+`;
+    }
+
+    private async _fixErrors(code: string) {
+        if (!code.trim()) return;
+        if (this._apiKey === undefined) await this._loadApiKey();
+        
+        const t = translations[this._language];
+        if (this._view) {
+            this._isAnalyzingRef = 'fast';
+            this._view.webview.postMessage({ type: 'loadingFix', value: true });
+
+            const system = this._getFixErrorsPrompt();
+            const userPrompt = `Find and fix all errors in this code:\n${code}`;
+            const fullPrompt = `${system}\n\n${userPrompt}`;
+            
+            try {
+                const result = await AIService.analyze(fullPrompt, this._language, this._apiKey);
+                this._isAnalyzingRef = null;
+                this._view.webview.postMessage({ type: 'fixResult', result });
+                this._view.webview.postMessage({ type: 'loadingFix', value: false });
+            } catch (err: unknown) {
+                this._isAnalyzingRef = null;
+                this._view.webview.postMessage({ type: 'loadingFix', value: false });
+                this._view.webview.postMessage({ type: 'fixResult', result: { error: String(err) } });
+            }
+        }
+    }
 
     private _getHtmlForWebview(webview: vscode.Webview) {
         const nonce = getNonce();
         const config = vscode.workspace.getConfiguration('contrarianCoder');
         const hasKey = this._apiKey !== undefined && this._apiKey !== "";
         const t = translations[this._language];
+
+        // Serializamos los últimos resultados para insertarlos directamente en el script
+        const initialFullAnalysis = this._lastAnalysisResult ? JSON.stringify(this._lastAnalysisResult).replace(/</g, '\\u003c') : 'null';
+        const initialFastAnalysis = this._lastFastResult ? JSON.stringify(this._lastFastResult).replace(/</g, '\\u003c') : 'null';
+        const initialRef = this._isAnalyzingRef ? `'${this._isAnalyzingRef}'` : 'null';
 
         return `<!DOCTYPE html>
             <html lang="${this._language}">
@@ -413,44 +531,52 @@ ${t.currentCodeLabel}:\n${code}`;
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' 'unsafe-eval' 'unsafe-inline';">
                 <style>
-                    body { font-family: sans-serif; background: #252526; color: #ccc; margin: 0; padding: 10px; font-size: 12px; line-height: 1.4; }
+                    body { font-family: var(--vscode-font-family, sans-serif); background: var(--vscode-sideBar-background, #252526); color: var(--vscode-sideBar-foreground, #ccc); margin: 0; padding: 10px; font-size: 12px; line-height: 1.4; }
                     .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-                    .lang-toggle { display: flex; background: #333; border-radius: 4px; padding: 2px; }
-                    .lang-btn { background: transparent; color: #aaa; border: none; padding: 4px 8px; font-size: 10px; cursor: pointer; border-radius: 3px; width: auto; font-weight: normal; }
-                    .lang-btn.active { background: #007acc; color: white; font-weight: bold; }
+                    .lang-toggle { display: flex; background: var(--vscode-input-background, #333); border-radius: 4px; padding: 2px; }
+                    .lang-btn { background: transparent; color: var(--vscode-descriptionForeground, #aaa); border: none; padding: 4px 8px; font-size: 10px; cursor: pointer; border-radius: 3px; width: auto; font-weight: normal; }
+                    .lang-btn.active { background: var(--vscode-button-background, #007acc); color: var(--vscode-button-foreground, white); font-weight: bold; }
                     
-                    .config-panel { background: #333; padding: 10px; border-radius: 4px; margin-bottom: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-                    .config-panel input, .config-panel select, textarea { background: #1e1e1e; border: 1px solid #555; color: #eee; width: 100%; box-sizing: border-box; padding: 4px; border-radius: 2px; }
-                    button { background: #007acc; color: #fff; border: none; padding: 6px; border-radius: 2px; cursor: pointer; width: 100%; font-weight: bold; }
-                    .intent-box { background: #1e1e1e; padding: 10px; border-radius: 4px; border-left: 4px solid #6a3d9a; margin-bottom: 15px; }
+                    .config-panel { background: var(--vscode-input-background, #333); padding: 10px; border-radius: 4px; margin-bottom: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+                    .config-panel input, .config-panel select, textarea { background: var(--vscode-editor-background, #1e1e1e); border: 1px solid var(--vscode-input-border, #555); color: var(--vscode-input-foreground, #eee); width: 100%; box-sizing: border-box; padding: 4px; border-radius: 2px; }
+                    button { background: var(--vscode-button-background, #007acc); color: var(--vscode-button-foreground, #fff); border: none; padding: 6px; border-radius: 2px; cursor: pointer; width: 100%; font-weight: bold; }
+                    button:hover { background: var(--vscode-button-hoverBackground, #0062a3); }
+                    .intent-box { background: var(--vscode-editor-background, #1e1e1e); padding: 10px; border-radius: 4px; border-left: 4px solid #6a3d9a; margin-bottom: 15px; }
                     .intent-box button { background: #6a3d9a; margin-top: 6px; }
+                    .intent-box button:hover { background: #7b4dab; }
                     
                     #results { margin-top: 10px; }
-                    .card { background: #2d2d2d; border: 1px solid #444; padding: 12px; border-radius: 6px; margin-bottom: 15px; animation: fadeIn 0.4s; position: relative; }
+                    .card { background: var(--vscode-editor-background, #2d2d2d); border: 1px solid var(--vscode-panel-border, #444); padding: 12px; border-radius: 6px; margin-bottom: 15px; animation: fadeIn 0.4s; position: relative; }
                     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-                    .card h2 { margin: 0 0 8px 0; font-size: 13px; color: #4fc1ff; display: flex; align-items: center; gap: 6px; }
-                    .approach-card { border-color: #6a3d9a; background: rgba(106, 61, 154, 0.05); }
+                    .card h2 { margin: 0 0 8px 0; font-size: 13px; color: var(--vscode-textLink-foreground, #4fc1ff); display: flex; align-items: center; gap: 6px; }
+                    .approach-card { border-color: #6a3d9a; }
                     .approach-card h2 { color: #b180d7; }
-                    pre { background: #000; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 11px; border: 1px solid #333; margin: 8px 0; }
-                    .apply-btn { background: #388e3c; margin-bottom: 10px; font-size: 11px; padding: 6px 10px; width: auto; display: inline-block; cursor: pointer; border-radius: 4px; transition: 0.2s; }
+                    pre { background: var(--vscode-textCodeBlock-background, #000); padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 11px; border: 1px solid var(--vscode-panel-border, #333); margin: 8px 0; }
+                    .btn-group { display: flex; gap: 6px; margin-bottom: 10px; }
+                    .apply-btn { background: #388e3c; font-size: 11px; padding: 6px 10px; width: auto; display: inline-block; cursor: pointer; border-radius: 4px; transition: 0.2s; }
                     .apply-btn:hover { background: #43a047; transform: scale(1.02); }
+                    .copy-btn { background: var(--vscode-button-secondaryBackground, #3a3d41); color: var(--vscode-button-secondaryForeground, #ccc); font-size: 11px; padding: 6px 10px; width: auto; display: inline-block; cursor: pointer; border-radius: 4px; transition: 0.2s; }
+                    .copy-btn:hover { background: var(--vscode-button-secondaryHoverBackground, #505357); transform: scale(1.02); }
+                    .copy-btn.copied { background: #388e3c; color: #fff; }
                     .list-section { margin: 10px 0; }
                     .list-section strong { display: block; margin-bottom: 4px; font-size: 11px; text-transform: uppercase; opacity: 0.8; }
-                    .errors { color: #f48771; }
+                    .errors { color: var(--vscode-errorForeground, #f48771); }
                     .pros { color: #89d185; }
-                    .cons { color: #f48771; border-top: 1px solid #444; padding-top: 5px; }
+                    .cons { color: var(--vscode-errorForeground, #f48771); border-top: 1px solid var(--vscode-panel-border, #444); padding-top: 5px; }
                     ul { margin: 0; padding-left: 20px; }
                     li { margin-bottom: 3px; }
-                    .loader { text-align: center; padding: 10px; color: #aaa; font-style: italic; border: 1px dashed #444; border-radius: 6px; margin: 5px 0; }
+                    .loader { text-align: center; padding: 10px; color: var(--vscode-descriptionForeground, #aaa); font-style: italic; border: 1px dashed var(--vscode-panel-border, #444); border-radius: 6px; margin: 5px 0; }
                     
-                    .analyze-btn { background: #007acc; padding: 10px; font-size: 12px; margin-bottom: 15px; }
-                    .analyze-btn:hover { background: #0062a3; }
+                    .analyze-btn { background: var(--vscode-button-background, #007acc); padding: 10px; font-size: 12px; margin-bottom: 10px; }
+                    .analyze-btn:hover { background: var(--vscode-button-hoverBackground, #0062a3); }
+                    .fix-btn { background: #d32f2f; padding: 10px; font-size: 12px; margin-bottom: 15px; border-left: 4px solid #f44336; }
+                    .fix-btn:hover { background: #e53935; }
 
-                    .help-section { background: rgba(0, 122, 204, 0.05); border: 1px solid rgba(0, 122, 204, 0.2); border-radius: 4px; padding: 10px; margin-top: 20px; }
-                    .help-section h3 { margin: 0 0 8px 0; font-size: 12px; color: #007acc; display: flex; justify-content: space-between; cursor: pointer; }
+                    .help-section { background: var(--vscode-editor-background, rgba(0, 122, 204, 0.05)); border: 1px solid var(--vscode-panel-border, rgba(0, 122, 204, 0.2)); border-radius: 4px; padding: 10px; margin-top: 20px; }
+                    .help-section h3 { margin: 0 0 8px 0; font-size: 12px; color: var(--vscode-textLink-foreground, #007acc); display: flex; justify-content: space-between; cursor: pointer; }
                     .help-content { display: none; margin-top: 8px; font-size: 11px; }
                     .help-content p { margin: 0 0 8px 0; }
-                    .help-content b { color: #fff; }
+                    .help-content b { color: var(--vscode-foreground, #fff); }
                     .help-section.open .help-content { display: block; }
                 </style>
             </head>
@@ -486,6 +612,7 @@ ${t.currentCodeLabel}:\n${code}`;
                 </div>
 
                 <button id="analyzeManualBtn" class="analyze-btn">${t.analyzeBtn}</button>
+                <button id="fixErrorsBtn" class="fix-btn">${t.fixErrorsBtn}</button>
 
                 <div id="status"></div>
                 <div id="results"></div>
@@ -498,6 +625,7 @@ ${t.currentCodeLabel}:\n${code}`;
                         <p>${t.helpIntent}</p>
                         <p>${t.helpApply}</p>
                         <p>${t.helpStrategy}</p>
+                        <p>${t.helpFix}</p>
                     </div>
                 </div>
 
@@ -507,10 +635,104 @@ ${t.currentCodeLabel}:\n${code}`;
                     const statusDiv = document.getElementById('status');
                     
                     let currentAnalysis = null;
+                    const initialFullAnalysis = ${initialFullAnalysis};
+                    const initialFastAnalysis = ${initialFastAnalysis};
+                    const initialRef = ${initialRef};
 
-                    // Restaurar estado al recargar la vista
+                    // Render functions hoisted
+                    function renderAnalysis(res) {
+                        let html = '';
+                        if (res.error) { html = '<div class="card" style="border-color: var(--vscode-errorForeground, #f48771);">' + res.error + '</div>'; }
+                        else {
+                            if (res.approaches && res.approaches.length > 0) {
+                                res.approaches.forEach((app, i) => {
+                                    html += '<div class="card approach-card">' +
+                                        '<h2>${t.pathLabel}' + (i+1) + ': ' + app.title + '</h2>' +
+                                        '<p>' + app.description + '</p>' +
+                                        (app.code ? '<pre><code>' + escapeHtml(app.code) + '</code></pre>' : '') +
+                                        (app.code ? '<div class="btn-group"><button class="apply-btn" id="btn-app-' + i + '">${t.applyBtn}</button><button class="copy-btn" id="btn-copy-app-' + i + '">${t.copyBtn}</button></div>' : '') +
+                                        renderList('${t.errorsLabel}', app.potentialErrors, 'errors') +
+                                        renderList('${t.prosLabel}', app.advantages, 'pros') +
+                                        renderList('${t.consLabel}', app.disadvantages, 'cons') +
+                                        '</div>';
+                                });
+                            }
+                            if (res.contrarianWay) {
+                                html += '<div class="card">' +
+                                    '<h2>${t.contrarianTitle}</h2>' +
+                                    '<pre><code>' + escapeHtml(res.contrarianWay) + '</code></pre>' +
+                                    '<div class="btn-group"><button class="apply-btn" id="btn-contrarian">${t.applyBtn}</button><button class="copy-btn" id="btn-copy-contrarian">${t.copyBtn}</button></div>' +
+                                    renderList('${t.prosLabel}', res.advantages, 'pros') +
+                                    renderList('${t.consLabel}', res.disadvantages, 'cons') +
+                                    renderList('${t.detectedErrors}', res.originalErrors, 'errors') +
+                                    '</div>';
+                            }
+                        }
+                        resultsDiv.innerHTML = html;
+
+                        if (res.approaches) {
+                            res.approaches.forEach((app, i) => {
+                                const btn = document.getElementById('btn-app-' + i);
+                                if (btn) btn.onclick = () => sendApplyCode(app.code, app.originalCodeToReplace);
+                                const cpBtn = document.getElementById('btn-copy-app-' + i);
+                                if (cpBtn) cpBtn.onclick = () => copyToClipboard(app.code, cpBtn);
+                            });
+                        }
+                        const cBtn = document.getElementById('btn-contrarian');
+                        if (cBtn) cBtn.onclick = () => sendApplyCode(res.contrarianWay, res.originalCodeToReplace);
+                        const ccBtn = document.getElementById('btn-copy-contrarian');
+                        if (ccBtn) ccBtn.onclick = () => copyToClipboard(res.contrarianWay, ccBtn);
+                    }
+
+                    function escapeHtml(unsafe) {
+                        return unsafe
+                             .replace(/&/g, "&amp;")
+                             .replace(/</g, "&lt;")
+                             .replace(/>/g, "&gt;")
+                             .replace(/"/g, "&quot;")
+                             .replace(/'/g, "&#039;");
+                    }
+
+                    function renderList(title, items, className) {
+                        if (!items || items.length === 0) return '';
+                        return '<div class="list-section ' + className + '"><strong>' + title + '</strong><ul>' +
+                            items.map(it => '<li>' + it + '</li>').join('') + '</ul></div>';
+                    }
+
+                    function sendApplyCode(code, originalToReplace) {
+                        if (!code) return;
+                        vscode.postMessage({ type: 'applyCode', code: code, originalCodeToReplace: originalToReplace });
+                    }
+                    window.sendApplyCode = sendApplyCode;
+
+                    function copyToClipboard(code, btnEl) {
+                        if (!code) return;
+                        navigator.clipboard.writeText(code).then(() => {
+                            const original = btnEl.innerText;
+                            btnEl.innerText = '${t.copiedBtn}';
+                            btnEl.classList.add('copied');
+                            setTimeout(() => { btnEl.innerText = original; btnEl.classList.remove('copied'); }, 2000);
+                        });
+                    }
+
+                    // Init logic
+                    if (initialRef === 'project') {
+                        statusDiv.innerHTML = '<div class="loader">${t.loadingProject}</div>';
+                    } else if (initialRef === 'fast') {
+                        statusDiv.innerHTML = '<div class="loader">${t.loadingFast}</div>';
+                    } else if (initialRef === 'slow') {
+                        if (initialFastAnalysis) {
+                            currentAnalysis = initialFastAnalysis;
+                            renderAnalysis(currentAnalysis);
+                        }
+                        statusDiv.innerHTML = '<div class="loader">${t.loadingSlow}</div>';
+                    } else if (initialFullAnalysis) {
+                        currentAnalysis = initialFullAnalysis;
+                        renderAnalysis(currentAnalysis);
+                    }
+
                     const previousState = vscode.getState();
-                    if (previousState && previousState.analysis) {
+                    if (!initialRef && !initialFullAnalysis && previousState && previousState.analysis) {
                         currentAnalysis = previousState.analysis;
                         renderAnalysis(currentAnalysis);
                     }
@@ -556,12 +778,9 @@ ${t.currentCodeLabel}:\n${code}`;
                     document.getElementById('analyzeManualBtn').onclick = () => {
                         vscode.postMessage({ type: 'manualAnalyze' });
                     };
-
-                    function sendApplyCode(code, originalToReplace) {
-                        if (!code) return;
-                        vscode.postMessage({ type: 'applyCode', code: code, originalCodeToReplace: originalToReplace });
-                    }
-                    window.sendApplyCode = sendApplyCode;
+                    document.getElementById('fixErrorsBtn').onclick = () => {
+                        vscode.postMessage({ type: 'fixErrors' });
+                    };
 
                     window.addEventListener('message', event => {
                         const msg = event.data;
@@ -575,67 +794,44 @@ ${t.currentCodeLabel}:\n${code}`;
                         if (msg.type === 'loadingProject') { statusDiv.innerHTML = msg.value ? '<div class="loader">${t.loadingProject}</div>' : ''; }
                         if (msg.type === 'loadingFast') { statusDiv.innerHTML = msg.value ? '<div class="loader">${t.loadingFast}</div>' : ''; }
                         if (msg.type === 'loadingSlow') { statusDiv.innerHTML = msg.value ? '<div class="loader">${t.loadingSlow}</div>' : ''; }
+                        if (msg.type === 'loadingFix') { statusDiv.innerHTML = msg.value ? '<div class="loader">${t.loadingFix}</div>' : ''; }
                         if (msg.type === 'fastResult' || msg.type === 'slowResult') { 
                             currentAnalysis = msg.analysis;
                             renderAnalysis(msg.analysis); 
                             vscode.setState({ analysis: msg.analysis, intent: document.getElementById('intentInput').value });
                         }
-                    });
-
-                    function renderAnalysis(res) {
-                        let html = '';
-                        if (res.error) { html = '<div class="card" style="border-color: #f48771;">' + res.error + '</div>'; }
-                        else {
-                            if (res.approaches && res.approaches.length > 0) {
-                                res.approaches.forEach((app, i) => {
-                                    html += '<div class="card approach-card">' +
-                                        '<h2>${t.pathLabel}' + (i+1) + ': ' + app.title + '</h2>' +
-                                        '<p>' + app.description + '</p>' +
-                                        (app.code ? '<pre><code>' + escapeHtml(app.code) + '</code></pre>' : '') +
-                                        (app.code ? '<button class="apply-btn" id="btn-app-' + i + '">${t.applyBtn}</button>' : '') +
-                                        renderList('${t.errorsLabel}', app.potentialErrors, 'errors') +
-                                        renderList('${t.prosLabel}', app.advantages, 'pros') +
-                                        renderList('${t.consLabel}', app.disadvantages, 'cons') +
-                                        '</div>';
+                        if (msg.type === 'fixResult') {
+                            let html = '';
+                            if (msg.result.error) {
+                                html = '<div class="card" style="border-color: var(--vscode-errorForeground, #f48771);">' + msg.result.error + '</div>';
+                            } else if (msg.result.fixes && msg.result.fixes.length > 0) {
+                                html += '<div class="card"><h2>${t.fixTitle}</h2><p><strong>' + msg.result.summary + '</strong></p>';
+                                msg.result.fixes.forEach((f, i) => {
+                                    html += '<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--vscode-panel-border);">';
+                                    html += '<p>⚠️ ' + f.description + ' ' + (f.line ? '(Lnea: ' + f.line + ')' : '') + '</p>';
+                                    html += '<strong>${t.fixOriginal}:</strong><pre style="border-left: 3px solid #f44336;"><code>' + escapeHtml(f.originalCode) + '</code></pre>';
+                                    html += '<strong>${t.fixCorrected}:</strong><pre style="border-left: 3px solid #4CAF50;"><code>' + escapeHtml(f.fixedCode) + '</code></pre>';
+                                    html += '<div class="btn-group">';
+                                    html += '<button class="apply-btn" id="btn-fix-apply-' + i + '">${t.applyBtn}</button>';
+                                    html += '<button class="copy-btn" id="btn-fix-copy-' + i + '">${t.copyBtn}</button>';
+                                    html += '</div></div>';
+                                });
+                                html += '</div>';
+                            } else {
+                                html = '<div class="card" style="border-color: #4CAF50; color: #4CAF50;">' + '${t.fixNoErrors}' + '</div>';
+                            }
+                            resultsDiv.innerHTML = html;
+                            
+                            if (msg.result.fixes) {
+                                msg.result.fixes.forEach((f, i) => {
+                                    const applyB = document.getElementById('btn-fix-apply-' + i);
+                                    if (applyB) applyB.onclick = () => sendApplyCode(f.fixedCode, f.originalCode);
+                                    const copyB = document.getElementById('btn-fix-copy-' + i);
+                                    if (copyB) copyB.onclick = () => copyToClipboard(f.fixedCode, copyB);
                                 });
                             }
-                            if (res.contrarianWay) {
-                                html += '<div class="card">' +
-                                    '<h2>${t.contrarianTitle}</h2>' +
-                                    '<pre><code>' + escapeHtml(res.contrarianWay) + '</code></pre>' +
-                                    '<button class="apply-btn" id="btn-contrarian">${t.applyBtn}</button>' +
-                                    renderList('${t.prosLabel}', res.advantages, 'pros') +
-                                    renderList('${t.consLabel}', res.disadvantages, 'cons') +
-                                    renderList('${t.detectedErrors}', res.originalErrors, 'errors') +
-                                    '</div>';
-                            }
                         }
-                        resultsDiv.innerHTML = html;
-
-                        if (res.approaches) {
-                            res.approaches.forEach((app, i) => {
-                                const btn = document.getElementById('btn-app-' + i);
-                                if (btn) btn.onclick = () => sendApplyCode(app.code, app.originalCodeToReplace);
-                            });
-                        }
-                        const cBtn = document.getElementById('btn-contrarian');
-                        if (cBtn) cBtn.onclick = () => sendApplyCode(res.contrarianWay, res.originalCodeToReplace);
-                    }
-
-                    function escapeHtml(unsafe) {
-                        return unsafe
-                             .replace(/&/g, "&amp;")
-                             .replace(/</g, "&lt;")
-                             .replace(/>/g, "&gt;")
-                             .replace(/"/g, "&quot;")
-                             .replace(/'/g, "&#039;");
-                    }
-
-                    function renderList(title, items, className) {
-                        if (!items || items.length === 0) return '';
-                        return '<div class="list-section ' + className + '"><strong>' + title + '</strong><ul>' +
-                            items.map(it => '<li>' + it + '</li>').join('') + '</ul></div>';
-                    }
+                    });
                     
                     vscode.postMessage({ type: 'ready' });
                 </script>

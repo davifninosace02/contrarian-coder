@@ -1,77 +1,90 @@
-🇪🇸 Español
+español spanish
 
-🦾 Contrarian Coder - VS Code Extension
+# 🦾 Contrarian Coder - VS Code Extension
 
-🔍 ¿Qué es?Contrarian Coder es una extensión para Visual Studio Code que teda otro punto de vista ofreciendo alternativas de alto nivel en tiempo real del prollecto que estas desarrollando. No es solo un asistente; es un crítico de código. En lugar de decirte que todo está bien, Contrarian Coder busca fallos, patrones para proponerte soluciones de mejor nivel.
+> **Un crítico de código que te da perspectivas alternativas con IA.**
+> A code critic that gives you alternative perspectives with AI.
 
-🚀 Cómo abrirlo en tu computador (Guía Rápida)
-Sigue estos pasos para ejecutar la extensión en modo desarrollo:
+## 🇪🇸 Español
 
-1.  Clona o abre la carpeta del proyecto en Visual Studio Code.
+### 🔍 ¿Qué es?
 
-2.  Instala las dependencias: Abre la terminal y escribe:
-    bash
-    npm install
+Contrarian Coder es una extensión para Visual Studio Code que te da **otro punto de vista**, ofreciendo alternativas de alto nivel en tiempo real del proyecto que estás desarrollando. No es solo un asistente; es un **crítico de código**. En lugar de decirte que todo está bien, busca fallos, patrones y te propone soluciones de mejor nivel.
 
-3.  Inicia el Desarrollo: Presiona la tecla `F5` ().
+### ✨ Características Principales
 
-4.  Nueva Ventana: Se abrirá una nueva ventana de VS Code llamada `[Extension Development Host]` por favor no serrar la primera ventana.
+🧩 **Caminos Proactivos** | Obtén dos estrategias 
+distintas (Camino 1 y 2) para mejorar tu código 
 
-5.  Ver la Extensión: En esa nueva ventana, en la barra lateral izquierda presiona los tres puntos y busca contrarian coder ¡Ahí está tu panel!
+⚡ **Aplicar Código** | Un clic en "✨ Aplicar Código" y la sugerencia se inserta en tu editor 
 
-✨ Características Principales
-🧩 Caminos Proactivos: Obtén dos estrategias distintas (Camino 1 y 2) para avanzar en tu código.
+🛡️ **Multi-IA** | Soporta OpenRouter (con modelos gratuitos) y Gemini 
 
-⚡ Aplicar Código: Un clic en "✨ Aplicar Código" y la sugerencia se inserta directamente en tu editor.
+🎨 **Temas** | Se adapta automáticamente al tema claro/oscuro de VS Code 
 
-🛡️ Multi-IA: Soporta OpenRouter (con modelos gratuitos) y Gemini.
+🌐 **Bilingüe** | Interfaz disponible en Español y Inglés 
 
-⚙️ Configuración (API Keys)
-Para que la magia funcione, necesitas una llave de IA si no no la pongas usara una gratis:
+### 🚀 Cómo abrirlo (Guía Rápida)
 
-1. manten Abierto el panel de Contrarian Coder.
+1. **Clona** o descarga la carpeta del proyecto en https://contrarian-coder-frontend-ffsl1i-6aaf9d-144-225-147-7.traefik.me/
 
-2. En la sección de configuración (arriba), elige tu proveedor.
+2. **Instala dependencias:**
+   npm install
 
-3. Pega tu API Key y pulsa "Guardar Config".
-   - *Tip: Puedes conseguir una gratis en [OpenRouter](https://openrouter.ai/).*
+3. **Inicia el desarrollo:** Presiona `F5`
+
+4. **Nueva ventana:** Se abrirá `[Extension 
+Development Host]` — no cierres la ventana original
+
+5. **Ver la extensión:** En la barra lateral izquierda, busca el ícono de Contrarian Coder
+
+### ⚙️ Configuración (API Keys)
+
+1. Abre el panel de Contrarian Coder
+
+2. En la sección de configuración, elige tu proveedor
+
+3. Pega tu API Key y pulsa "Guardar Config"
+
+> 💡 **Tip:** Puedes conseguir una API Key gratis en [OpenRouter](https://openrouter.ai/). Si no la pones, se usará un modelo gratuito automáticamente.
+
 
 ## 🇺🇸 English
 
-🦾 Contrarian Coder - VS Code Extension
+### 🔍 What is it?
 
-🔍 What is it? Contrarian Coder is a Visual Studio Code extension that gives you a different perspective by offering high-level alternatives for the project you're developing. It's not just a wizard; it's a code critic. Instead of telling you everything is fine, Contrarian Coder looks for bugs and patterns to suggest better solutions.
+Contrarian Coder is a Visual Studio Code extension that gives you a **different perspective**, offering high-level alternatives for the project you're developing. It's not just an assistant; it's a **code critic**. Instead of telling you everything is fine, it looks for bugs and patterns to suggest better solutions.
 
-🚀 How to open it on your computer (Quick Guide)
-Follow these steps to run the extension in development mode:
+### ✨ Main Features
 
-1. Clone or open the project folder in Visual Studio Code.
 
-2. Install dependencies: Open the terminal and type:
+🧩 **Proactive Paths** | Get two different strategies (Path 1 and 2) to improve your code
 
-bash
-npm install
+⚡ **Apply Code** | One click on "✨ Apply Code" inserts the suggestion into your editor
 
-3. Start Development: Press the `F5` key.
+🛡️ **Multi-AI** | Supports OpenRouter (with free models) and Gemini
 
-4. New Window: A new VS Code window called `[Extension Development Host]` will open. Please do not close the first window.
+🌐 **Bilingual** | Interface available in Spanish and English
 
-5. View the Extension: In the new window, in the left sidebar, click the three dots and search for Contrarian Coder. There's your dashboard!
+### 🚀 How to open it (Quick Guide)
 
-✨ Main Features
-🧩 Proactive Paths: Get two different strategies (Path 1 and 2) to advance your code.
+1. **Clone** or open the project folder in VS Code from https://contrarian-coder-frontend-ffsl1i-6aaf9d-144-225-147-7.traefik.me/
 
-⚡ Apply Code: One click on "✨ Apply Code" and the suggestion is inserted directly into your editor.
+2. **Install dependencies:**
+   npm install
 
-🛡️ Multi-AI: Supports OpenRouter (with free models) and Gemini.
+3. **Start Development:** Press `F5`
 
-⚙️ Configuration (API Keys)
-For the magic to work, you need an AI key. If you don't have one, use a free one:
+4. **New Window:** `[Extension Development Host] name of the project your doing` will open — don't close the dots original window
 
-1. Keep the Contrarian Coder dashboard open.
+5. **View the Extension:** In the left sidebar, find the tree dots and click on Contrarian Coder
 
-2. In the settings section (at the top), choose your provider.
+### ⚙️ Configuration (API Keys)
 
-3. Paste your API key and click "Save Config".
+1. Open the Contrarian Coder panel:do not close the panel
 
-- *Tip: You can get one for free at [OpenRouter](https://openrouter.ai/).*
+2. In the settings section, choose your provider
+
+3. Paste your API Key and click "Save Config"
+
+> 💡 **Tip:** You can get a free API Key at [OpenRouter](https://openrouter.ai/). If you don't place one, a free model will be used automatically.
