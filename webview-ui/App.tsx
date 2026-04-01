@@ -148,17 +148,15 @@ const App = () => {
                     {res.isFast ? '⚡ Análisis Rápido' : '🧠 Análisis Completo'}
                 </div>
 
-                {/* Planes de Usuario — Prioridad Máxima */}
                 {renderApproaches(res.approaches || [])}
 
-                {/* Mejoras sugeridas */}
                 {renderImprovements(res.improvements || [])}
 
                 <section>
                     <h3>La Manera Contraria</h3>
                     <pre><code>{res.contrarianWay}</code></pre>
                 </section>
-                
+
                 <div className="analysis-grid">
                     <section className="errors original-errors">
                         <h3>Errores en tu Código</h3>
@@ -208,13 +206,13 @@ const App = () => {
             </header>
 
             <div className="intent-area">
-                <textarea 
+                <textarea
                     placeholder="¿Qué vas a hacer? (ej: crear un login)"
                     value={userIntent}
                     onChange={(e) => setUserIntent(e.target.value)}
                     rows={2}
                 />
-                <button 
+                <button
                     onClick={handleConsultPlan}
                     className="consult-btn"
                     disabled={loadingFast || loadingSlow}

@@ -89,7 +89,11 @@ export function activate(context: vscode.ExtensionContext) {
     const provider = new ContrarianWebviewProvider(context);
 
     context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(ContrarianWebviewProvider.viewType, provider)
+        vscode.window.registerWebviewViewProvider(ContrarianWebviewProvider.viewType, provider, {
+            webviewOptions: {
+                retainContextWhenHidden: true
+            }
+        })
     );
 
     provider.initialize();
@@ -105,16 +109,18 @@ class ContrarianWebviewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'contrarian-coder-view';
     private _view?: vscode.WebviewView;
 
-    private _fastDelay: number = 0;
-    private _slowDelay: number = 0;
+    private _fastDelay: number = 25;
+    private _slowDelay: number = 35;
     private _fastTimer: ReturnType<typeof setTimeout> | undefined;
     private _slowTimer: ReturnType<typeof setTimeout> | undefined;
     private _lastFastResult: CodeAnalysisResult | null = null;
+    private _lastAnalysisResult: CodeAnalysisResult | null = null;
+    private _isAnalyzingRef: 'fast' | 'slow' | 'project' | null = null;
     private _apiKey: string | undefined;
     private _userIntent: string = '';
     private _language: string = 'es';
 
-    constructor(private readonly _context: vscode.ExtensionContext) { 
+    constructor(private readonly _context: vscode.ExtensionContext) {
         this._updateConfig();
     }
 
@@ -146,10 +152,24 @@ class ContrarianWebviewProvider implements vscode.WebviewViewProvider {
         };
         this._refreshWebviewHtml();
 
-        webviewView.webview.onDidReceiveMessage(async (data: { type: string; config?: any; intent?: string; code?: string }) => {
+        webviewView.webview.onDidReceiveMessage(async (data: { type: string; config?: any; intent?: string; code?: string; originalCodeToReplace?: string }) => {
             switch (data.type) {
                 case 'ready':
-                    // We only send initial code if a file is already open, but no auto-analysis
+                    if (this._isAnalyzingRef === 'project') {
+                        this._view?.webview.postMessage({ type: 'loadingProject', value: true });
+                    } else if (this._isAnalyzingRef === 'fast') {
+                        this._view?.webview.postMessage({ type: 'loadingFast', value: true });
+                    } else if (this._isAnalyzingRef === 'slow') {
+                        if (this._lastFastResult) {
+                            this._view?.webview.postMessage({ type: 'fastResult', analysis: this._lastFastResult });
+                        }
+                        this._view?.webview.postMessage({ type: 'loadingSlow', value: true });
+                    } else if (this._lastAnalysisResult) {
+                        this._view?.webview.postMessage({ type: 'slowResult', analysis: this._lastAnalysisResult });
+                    }
+                    if (this._userIntent) {
+                        this._view?.webview.postMessage({ type: 'restoreIntent', intent: this._userIntent });
+                    }
                     break;
                 case 'saveConfig':
                     await this._handleSaveConfig(data.config);
@@ -181,14 +201,14 @@ class ContrarianWebviewProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'applyCode':
                     if (data.code) {
-                        this._applyCodeToEditor(data.code);
+                        this._applyCodeToEditor(data.code, data.originalCodeToReplace);
                     }
                     break;
             }
         });
     }
 
-    private async _applyCodeToEditor(code: string) {
+    private async _applyCodeToEditor(code: string, originalCodeToReplace?: string) {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
             vscode.window.showErrorMessage(translations[this._language].openFileError);
@@ -197,10 +217,21 @@ class ContrarianWebviewProvider implements vscode.WebviewViewProvider {
 
         try {
             await editor.edit(editBuilder => {
-                if (editor.selection.isEmpty) {
-                    editBuilder.insert(editor.selection.active, code);
-                } else {
+                if (!editor.selection.isEmpty) {
                     editBuilder.replace(editor.selection, code);
+                } else if (originalCodeToReplace) {
+                    const documentText = editor.document.getText();
+                    const index = documentText.indexOf(originalCodeToReplace);
+                    if (index !== -1) {
+                        const startPos = editor.document.positionAt(index);
+                        const endPos = editor.document.positionAt(index + originalCodeToReplace.length);
+                        editBuilder.replace(new vscode.Range(startPos, endPos), code);
+                    } else {
+                        vscode.window.showWarningMessage('No se detectó el bloque original, se insertará en el cursor.');
+                        editBuilder.insert(editor.selection.active, code);
+                    }
+                } else {
+                    editBuilder.insert(editor.selection.active, code);
                 }
             });
             vscode.window.showInformationMessage(translations[this._language].applySuccess);
@@ -241,25 +272,32 @@ class ContrarianWebviewProvider implements vscode.WebviewViewProvider {
         if (this._fastTimer) clearTimeout(this._fastTimer);
         if (this._slowTimer) clearTimeout(this._slowTimer);
         if (!code.trim()) {
+            this._lastAnalysisResult = null;
+            this._isAnalyzingRef = null;
             this._view?.webview.postMessage({ type: 'clear' });
             return;
         }
-        
+
         if (this._apiKey === undefined) await this._loadApiKey();
-        
-        // Manual analysis ignores the normal waiting timers to be more responsive on button click
+
         if (this._view) {
+            this._isAnalyzingRef = isProject ? 'project' : 'fast';
             this._view.webview.postMessage({ type: isProject ? 'loadingProject' : 'loadingFast', value: true });
             const context = await this._gatherProjectContext();
             const analysis = await this._analyzeFast(code, this._apiKey, this._userIntent, context);
             this._lastFastResult = analysis;
+            this._lastAnalysisResult = analysis;
             analysis.isFast = true;
+            this._isAnalyzingRef = 'slow';
+
             this._view.webview.postMessage({ type: 'fastResult', analysis });
             this._view.webview.postMessage({ type: isProject ? 'loadingProject' : 'loadingFast', value: false });
 
             this._view.webview.postMessage({ type: 'loadingSlow', value: true });
             const slowAnalysis = await this._analyzeDetailed(code, this._lastFastResult, context, this._apiKey, this._userIntent);
             slowAnalysis.isFast = false;
+            this._lastAnalysisResult = slowAnalysis;
+            this._isAnalyzingRef = null;
             this._view.webview.postMessage({ type: 'slowResult', analysis: slowAnalysis });
             this._view.webview.postMessage({ type: 'loadingSlow', value: false });
         }
@@ -310,6 +348,7 @@ Your task is to analyze the provided code/context and offer **two distinct archi
 
 # RESPONSE SCHEMA (JSON)
 {
+  "originalCodeToReplace": "Exact block of the user's code to be replaced (without changes)",
   "contrarianWay": "Full functional and optimized code implementation here",
   "originalErrors": ["Detailed error/bottleneck 1 in ${langName}", "Detailed error/bottleneck 2 in ${langName}"],
   "advantages": ["Advantage 1 of the contrarian approach in ${langName}"],
@@ -318,6 +357,7 @@ Your task is to analyze the provided code/context and offer **two distinct archi
     {
       "title": "Short title of the alternative approach",
       "description": "Detailed description in ${langName}",
+      "originalCodeToReplace": "Exact block of the user's code to be replaced (without changes)",
       "code": "Functional code for this approach",
       "potentialErrors": ["List of risks in ${langName}"],
       "advantages": ["List of benefits in ${langName}"],
@@ -468,6 +508,13 @@ ${t.currentCodeLabel}:\n${code}`;
                     
                     let currentAnalysis = null;
 
+                    // Restaurar estado al recargar la vista
+                    const previousState = vscode.getState();
+                    if (previousState && previousState.analysis) {
+                        currentAnalysis = previousState.analysis;
+                        renderAnalysis(currentAnalysis);
+                    }
+
                     document.getElementById('lang-es').onclick = () => {
                         vscode.postMessage({ type: 'changeLanguage', config: { language: 'es' } });
                     };
@@ -493,28 +540,45 @@ ${t.currentCodeLabel}:\n${code}`;
                     };
 
                     document.getElementById('consultBtn').onclick = () => {
-                        vscode.postMessage({ type: 'updateIntent', intent: document.getElementById('intentInput').value });
+                        const intent = document.getElementById('intentInput').value;
+                        vscode.setState({ analysis: currentAnalysis, intent: intent });
+                        vscode.postMessage({ type: 'updateIntent', intent: intent });
                     };
+
+                    // Guardar el input "intent" si el usuario lo escribe, para que no se borre
+                    document.getElementById('intentInput').addEventListener('input', (e) => {
+                        vscode.setState({ analysis: currentAnalysis, intent: e.target.value });
+                    });
+                    if (previousState && previousState.intent) {
+                        document.getElementById('intentInput').value = previousState.intent;
+                    }
 
                     document.getElementById('analyzeManualBtn').onclick = () => {
                         vscode.postMessage({ type: 'manualAnalyze' });
                     };
 
-                    function sendApplyCode(code) {
+                    function sendApplyCode(code, originalToReplace) {
                         if (!code) return;
-                        vscode.postMessage({ type: 'applyCode', code: code });
+                        vscode.postMessage({ type: 'applyCode', code: code, originalCodeToReplace: originalToReplace });
                     }
                     window.sendApplyCode = sendApplyCode;
 
                     window.addEventListener('message', event => {
                         const msg = event.data;
-                        if (msg.type === 'clear') { resultsDiv.innerHTML = ''; statusDiv.innerHTML = ''; currentAnalysis = null; }
+                        if (msg.type === 'restoreIntent') {
+                            document.getElementById('intentInput').value = msg.intent;
+                        }
+                        if (msg.type === 'clear') { 
+                            resultsDiv.innerHTML = ''; statusDiv.innerHTML = ''; currentAnalysis = null; 
+                            vscode.setState({ analysis: null, intent: document.getElementById('intentInput').value });
+                        }
                         if (msg.type === 'loadingProject') { statusDiv.innerHTML = msg.value ? '<div class="loader">${t.loadingProject}</div>' : ''; }
                         if (msg.type === 'loadingFast') { statusDiv.innerHTML = msg.value ? '<div class="loader">${t.loadingFast}</div>' : ''; }
                         if (msg.type === 'loadingSlow') { statusDiv.innerHTML = msg.value ? '<div class="loader">${t.loadingSlow}</div>' : ''; }
                         if (msg.type === 'fastResult' || msg.type === 'slowResult') { 
                             currentAnalysis = msg.analysis;
                             renderAnalysis(msg.analysis); 
+                            vscode.setState({ analysis: msg.analysis, intent: document.getElementById('intentInput').value });
                         }
                     });
 
@@ -551,11 +615,11 @@ ${t.currentCodeLabel}:\n${code}`;
                         if (res.approaches) {
                             res.approaches.forEach((app, i) => {
                                 const btn = document.getElementById('btn-app-' + i);
-                                if (btn) btn.onclick = () => sendApplyCode(app.code);
+                                if (btn) btn.onclick = () => sendApplyCode(app.code, app.originalCodeToReplace);
                             });
                         }
                         const cBtn = document.getElementById('btn-contrarian');
-                        if (cBtn) cBtn.onclick = () => sendApplyCode(res.contrarianWay);
+                        if (cBtn) cBtn.onclick = () => sendApplyCode(res.contrarianWay, res.originalCodeToReplace);
                     }
 
                     function escapeHtml(unsafe) {

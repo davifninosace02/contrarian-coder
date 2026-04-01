@@ -12,19 +12,21 @@ export interface ProposedApproach {
     title: string;
     description: string;
     code: string;
+    originalCodeToReplace?: string;
     potentialErrors: string[];
     advantages: string[];
     disadvantages: string[];
 }
 
 export interface CodeAnalysisResult {
+    originalCodeToReplace?: string;
     contrarianWay?: string;
     originalErrors?: string[];
     contrarianErrors?: string[];
     advantages?: string[];
     disadvantages?: string[];
     improvements?: CodeImprovement[];
-    approaches?: ProposedApproach[]; // Nueva sección para planes de usuario
+    approaches?: ProposedApproach[];
     isFast?: boolean;
     error?: string;
 }
@@ -48,10 +50,6 @@ const aiTranslations: Record<string, any> = {
     }
 };
 
-/**
- * Servicio centralizado para comunicarse con proveedores de IA.
- * Soporta OpenRouter, Gemini (vía OpenRouter), y GPT (vía OpenRouter).
- */
 export class AIService {
 
     private static readonly FREE_MODELS = [
@@ -66,10 +64,6 @@ export class AIService {
         gpt: "openai/gpt-3.5-turbo",
     };
 
-    /**
-     * Llama a la API de IA con el prompt dado.
-     * Selecciona el modelo basándose en la configuración del usuario.
-     */
     public static async analyze(prompt: string, language: string, passedApiKey?: string): Promise<CodeAnalysisResult> {
         const config = vscode.workspace.getConfiguration('contrarianCoder');
         const provider = config.get<string>('aiProvider', 'openrouter');
@@ -78,10 +72,8 @@ export class AIService {
         
         let model = AIService.PROVIDER_MODELS[provider] || AIService.PROVIDER_MODELS.openrouter;
 
-        // Si no hay API key, intentar con modelos gratuitos
         if (!apiKey) {
             model = AIService.FREE_MODELS[Math.floor(Math.random() * AIService.FREE_MODELS.length)];
-            // Intentar usar la clave de OpenRouter gratuita si existe
             apiKey = config.get<string>('openRouterKey', ''); 
             if (!apiKey && provider !== 'openrouter') {
                 return { error: trans.errorKey };
@@ -91,9 +83,6 @@ export class AIService {
         return AIService._makeRequest(prompt, model, apiKey, language);
     }
 
-    /**
-     * Realiza la solicitud HTTPS a la API de OpenRouter.
-     */
     private static _makeRequest(prompt: string, model: string, apiKey: string, language: string): Promise<CodeAnalysisResult> {
         const trans = aiTranslations[language] || aiTranslations.es;
         return new Promise((resolve) => {
@@ -110,7 +99,7 @@ export class AIService {
                     'Authorization': `Bearer ${apiKey}`,
                     'HTTP-Referer': 'https://github.com/contrarian-coder',
                     'Content-Type': 'application/json',
-                    'Accept-Encoding': 'identity', // Evitar compresión para manejo simple de strings
+                    'Accept-Encoding': 'identity',
                     'Content-Length': Buffer.byteLength(postData)
                 }
             };
@@ -132,7 +121,6 @@ export class AIService {
                             return;
                         }
                         
-                        // Extraer JSON de forma más robusta
                         const jsonStart = content.indexOf('{');
                         const jsonEnd = content.lastIndexOf('}');
                         if (jsonStart === -1 || jsonEnd === -1) {
